@@ -1,10 +1,12 @@
-let tiles;
+var tiles;
 fetch('tiles.json').then(response => response.json()).then(data => tiles = data);
 
 const TILESIZE = 13;
 const GRIDWIDTH = 100;
 const GRIDHEIGHT = 160;
 const SQUARESIZE = 5;
+const BUFFERSIZE = 250;
+const BUFFERBUFFER = 10;  
 
 let globalScore = 0;
 
@@ -46,7 +48,6 @@ class SandGrid {
     }
 
     draw(){
-        background(100,100,100);
         rectMode(CORNER);
         // stroke(0, 0, 0);
         for (let i = 0; i < this.height; i++){
@@ -104,7 +105,7 @@ class SandGrid {
                 }
             }
         }
-        if (anyMoved == false){
+        if (true){
 
             for (let i = 0; i < this.grid.length; i++){
                 for (let j = 0; j < this.grid[0].length; j++){
@@ -155,7 +156,6 @@ class SandGrid {
                     }
                 }
                 if (hasFound){
-                    console.log(this.grid[i][0].type)
                     for (let i = 0; i < visitedTiles.length; i++){
                         visitedTiles[i].toBeRemoved = true;
                         // this.grid[visitedTiles[i].y][visitedTiles[i].x] = undefined; // REMOVE THIS FOR BETTER REMOVE ANIMNATION.
@@ -262,20 +262,20 @@ class TileGrid {
         return false;
     }
 
-    toGrid(type, rotation, xOff, yOff){
+    static toGrid(type, rotation, xOff, yOff, size){
         let retval = [];
         let tile = tiles[type][rotation];
         let colour = tiles["colours"][type]
         for (let i = 0; i < 4; i++){
             for (let j = 0; j < 4; j++){
                 if (tile[i][j] != 0){
-                    for (let k = 0; k < TILESIZE; k++){
-                        for (let h = 0; h < TILESIZE; h++){
-                            let index = 2-min(h,k,TILESIZE-h-1,TILESIZE-k-1);
+                    for (let k = 0; k < size; k++){
+                        for (let h = 0; h < size; h++){
+                            let index = 2-min(h,k,size-h-1,size-k-1);
                             if (index < 0){
                                 index = 0;
                             }
-                            retval.push([i*TILESIZE+k+xOff, j*TILESIZE+h+yOff,colour[index]]); // change colour based off distance from center.
+                            retval.push([i*size+k+xOff, j*size+h+yOff,colour[index]]); // change colour based off distance from center.
                         }
                     }
                 }
@@ -296,7 +296,7 @@ class TileGrid {
         this.currentTile = []
         this.currentType = type;
         this.currentRotation = 0;
-        this.currentTile = this.toGrid(type, 0, x, y);
+        this.currentTile = TileGrid.toGrid(type, 0, x, y, TILESIZE);
         for (let i = 0; i < this.currentTile.length; i++){
             if (grid.grid[this.currentTile[i][1]][this.currentTile[i][0]] != undefined){
                 return false;
@@ -322,7 +322,7 @@ class TileGrid {
     }
 
     rotateTile(grid){
-        let newTile = this.toGrid(this.currentType, ++this.currentRotation % 4, this.centerPos[0], this.centerPos[1]);
+        let newTile = TileGrid.toGrid(this.currentType, ++this.currentRotation % 4, this.centerPos[0], this.centerPos[1],TILESIZE);
         if (newTile.filter(a => {
             return (a[0] < 0 || a[0] >= GRIDWIDTH || a[1] < 0 || a[1] >= GRIDHEIGHT);
         }).length > 0){
@@ -338,18 +338,94 @@ class TileGrid {
     }
 }
 
+
+class BufferGrid {
+    constructor(startX, startY, WIDTH, HEIGHT, BUFFER){
+        this.startX = startX;
+        this.startY = startY;
+        this.WIDTH = WIDTH;
+        this.HEIGHT = HEIGHT;
+        this.buffer = BUFFER;
+        this.squaresize = 4;//floor((WIDTH-2*BUFFER)/(4*);
+        this.tileNames = [];
+        this.tileGrid = [];
+        this.currentXOffsets = []
+    }
+
+    addTile(tileName){
+        this.tileNames.push(tileName);
+        this.tileGrid.push(TileGrid.toGrid(tileName, 0, 0, TILESIZE*this.tileGrid.length*3+this.tileGrid.length*this.buffer, TILESIZE))
+        let min = width*2;
+        let max = 0;
+        for (let i = 0; i < this.tileGrid[this.tileGrid.length-1].length; i++){
+            if (this.tileGrid[this.tileGrid.length-1][i][0] < min){
+                min = this.tileGrid[this.tileGrid.length-1][i][0]
+            }
+            if (this.tileGrid[this.tileGrid.length-1][i][0] > max){
+                max = this.tileGrid[this.tileGrid.length-1][i][0]
+            }
+        }
+        this.currentXOffsets.push(parseInt(-min-max+width/2))
+        // this.currentXOffsets.push(min-max+BUFFERSIZE/2)
+
+        // width-max+this.startX = min
+
+    }
+
+    removeTile(){
+        this.tileGrid.shift();
+        this.tileNames.shift();
+        for (let i = 0; i < this.tileGrid.length; i++){
+            for (let j = 0; j < this.tileGrid[0].length; j++){
+                this.tileGrid[i][j][1]-=TILESIZE*3+this.buffer
+            }
+        }
+        this.currentXOffsets.shift();
+    }
+
+    draw(){
+        for (let i = 0; i < this.tileGrid.length; i++){
+            for (let j = 0; j < this.tileGrid[i].length; j++){
+                if (this.tileGrid[i][j] == undefined){
+                    console.log(i,j);
+                    continue;
+                }
+                fill(this.tileGrid[i][j][2]);
+                rect(this.currentXOffsets[i]+this.tileGrid[i][j][0]*this.squaresize+this.buffer, this.startY+this.tileGrid[i][j][1]*this.squaresize+this.buffer, this.squaresize, this.squaresize);
+            }
+        }
+    }
+}
+
+
+
+
+function random_tile_name(){
+    return ["L","T","I","J","O","Z","S"][parseInt(random()*7)]
+}
+
 let grid;
 let tileGrid;
+let bufferGrid;
 let holdCount = 0;
 let deletedCount = -1;
+let future_tiles = [];
 function setup(){
-    createCanvas(500,800);
+    createCanvas(GRIDWIDTH*SQUARESIZE+BUFFERSIZE,GRIDHEIGHT*SQUARESIZE);
     grid = new SandGrid(GRIDWIDTH, GRIDHEIGHT, SQUARESIZE);
     tileGrid = new TileGrid(GRIDWIDTH,GRIDHEIGHT,SQUARESIZE);
+    bufferGrid = new BufferGrid(GRIDWIDTH*SQUARESIZE, 0, BUFFERSIZE, height, BUFFERBUFFER);
+    for (let i = 0; i < 3; i++){
+        future_tiles.push(random_tile_name())
+        bufferGrid.addTile(future_tiles[i]);
+    }
 }
 
 function draw(){
     frameRate(40)
+    background(100);
+    fill(200);
+    rect(0,0,GRIDWIDTH*SQUARESIZE,GRIDHEIGHT*SQUARESIZE);
     noStroke();
     grid.draw();
     if (deletedCount == -1 && grid.update()){
@@ -367,14 +443,17 @@ function draw(){
             deletedCount = -1;
         }
     }else if (holdCount == 20){
-        if (!tileGrid.addTile(floor(GRIDWIDTH/3), 0, ["L","T","I","J","O","Z","S"][parseInt(random(7))], grid)){
+        if (!tileGrid.addTile(floor(GRIDWIDTH/3), 0, future_tiles[0], grid)){
             // GAME OVER
             textSize(32);
             textAlign(CENTER, CENTER);
             text("GAME OVER: Score " + globalScore, width/2, height/3);
-
             noLoop();
         };
+        future_tiles.shift();
+        bufferGrid.removeTile();
+        future_tiles.push(random_tile_name());
+        bufferGrid.addTile(future_tiles[future_tiles.length-1])
         holdCount++;
     } else if (holdCount == 50){
         if (tileGrid.update(grid)){
@@ -384,6 +463,10 @@ function draw(){
     } else {
         holdCount++;
     }
+
+
+    // Draw Future tiles & score in other zone.
+    bufferGrid.draw();
     
     if (keyIsDown(LEFT_ARROW)){
         tileGrid.moveLeft();
