@@ -1,10 +1,11 @@
-let tiles;
-fetch('tiles.json').then(response => response.json()).then(data => tiles = data);
+var tiles;
 
 const TILESIZE = 13;
 const GRIDWIDTH = 100;
 const GRIDHEIGHT = 160;
 const SQUARESIZE = 5;
+const BUFFERSIZE = 250;
+const BUFFERBUFFER = 10;  
 
 let globalScore = 0;
 
@@ -13,26 +14,27 @@ class SandParticle {
     constructor(x, y, colour, size, type){
         this.x = x;
         this.y = y;
+        this.currentColour = colour;
         this.colour = colour;
         this.size = size;
         this.isVisited = false;
         this.toBeRemoved = false;
         this.type = type
         this.flashing = false;
+        this.isActive = true;
     }
 
     draw(){
-        if (this.flashing){
-            fill(255);
-        } else {
-            fill(this.colour);
-        }
-
-        // if (this.isVisited){
-        //     fill(255);
-        // }
+        fill(this.currentColour);
         rect(this.x*this.size, this.y*this.size, this.size, this.size);
-        
+    }
+
+    flash(){
+        if (this.currentColour == this.colour){
+            this.currentColour = [255,255,255]; 
+        } else {
+            this.currentColour = this.colour;
+        }
     }
 }
 
@@ -46,7 +48,6 @@ class SandGrid {
     }
 
     draw(){
-        background(100,100,100);
         rectMode(CORNER);
         // stroke(0, 0, 0);
         for (let i = 0; i < this.height; i++){
@@ -62,7 +63,7 @@ class SandGrid {
         let anyMoved = false;
         for (let i = this.height-2; i >= 0; i--){
             for (let j = 0; j < this.width; j++){
-                if (this.grid[i][j] != undefined){
+                if (this.grid[i][j] != undefined && this.grid[i][j].isActive){
                     if (this.grid[i+1][j] == undefined){
                         this.grid[i][j].y++;
                         this.grid[i+1][j] = this.grid[i][j];
@@ -84,6 +85,8 @@ class SandGrid {
                                 this.grid[i+1][j-1] = this.grid[i][j];
                                 this.grid[i][j] = undefined;
                                 anyMoved = true;
+                            } else {
+                                this.isActive = false;
                             }
                         } else {
                             if (j > 0 && this.grid[i+1][j-1] == undefined) {
@@ -98,13 +101,15 @@ class SandGrid {
                                 this.grid[i+1][j+1] = this.grid[i][j];
                                 this.grid[i][j] = undefined;
                                 anyMoved = true;
-                            } 
+                            } else {
+                                this.isActive = false;
+                            }
                         }
                     }
                 }
             }
         }
-        if (anyMoved == false){
+        if (true){
 
             for (let i = 0; i < this.grid.length; i++){
                 for (let j = 0; j < this.grid[0].length; j++){
@@ -116,7 +121,7 @@ class SandGrid {
             }
             
             for (let i = 0; i < this.grid.length; i++){
-                if (this.grid[i][0] == undefined){
+                if (this.grid[i][0] == undefined || this.grid[i][0].isVisited == true){
                     continue;
                 }
                 let nextTiles = [this.grid[i][0]];
@@ -155,10 +160,15 @@ class SandGrid {
                     }
                 }
                 if (hasFound){
-                    console.log(this.grid[i][0].type)
                     for (let i = 0; i < visitedTiles.length; i++){
                         visitedTiles[i].toBeRemoved = true;
-                        // this.grid[visitedTiles[i].y][visitedTiles[i].x] = undefined; // REMOVE THIS FOR BETTER REMOVE ANIMNATION.
+                    }
+                    for (let i = 0; i < this.grid.length; i++){
+                        for (let j = 0; j < this.grid.length; j++){
+                            if (this.grid[i][j] != undefined){
+                                this.grid[i][j].isActive = true;
+                            }
+                        }
                     }
                     return true;  // Do not remove any other tiles, removes excess computation. 
                 }
@@ -192,7 +202,7 @@ class SandGrid {
             for (let i = 0; i < this.width; i++){
                 for (let j = 0; j < this.height; j++){
                     if (this.grid[j][i] != undefined&& this.grid[j][i].toBeRemoved){
-                        this.grid[j][i].flashing = true;
+                        this.grid[j][i].flash();
                     }
                 }
             }
@@ -200,7 +210,7 @@ class SandGrid {
             for (let i = 0; i < this.width; i++){
                 for (let j = 0; j < this.height; j++){
                     if (this.grid[j][i] != undefined&& this.grid[j][i].toBeRemoved){
-                        this.grid[j][i].flashing = false;
+                        this.grid[j][i].flash()
                     }
                 }
             }
@@ -262,20 +272,23 @@ class TileGrid {
         return false;
     }
 
-    toGrid(type, rotation, xOff, yOff){
+    static toGrid(type, rotation, xOff, yOff, size){
         let retval = [];
+        if (tiles == undefined){
+            return retval;
+        }
         let tile = tiles[type][rotation];
         let colour = tiles["colours"][type]
         for (let i = 0; i < 4; i++){
             for (let j = 0; j < 4; j++){
                 if (tile[i][j] != 0){
-                    for (let k = 0; k < TILESIZE; k++){
-                        for (let h = 0; h < TILESIZE; h++){
-                            let index = 2-min(h,k,TILESIZE-h-1,TILESIZE-k-1);
+                    for (let k = 0; k < size; k++){
+                        for (let h = 0; h < size; h++){
+                            let index = 2-min(h,k,size-h-1,size-k-1);
                             if (index < 0){
                                 index = 0;
                             }
-                            retval.push([i*TILESIZE+k+xOff, j*TILESIZE+h+yOff,colour[index]]); // change colour based off distance from center.
+                            retval.push([i*size+k+xOff, j*size+h+yOff,colour[index]]); // change colour based off distance from center.
                         }
                     }
                 }
@@ -289,6 +302,8 @@ class TileGrid {
             fill(this.currentTile[i][2])
             rect(this.currentTile[i][0]*this.size, this.currentTile[i][1]*this.size, this.size,this.size)
         }
+
+
     }
 
     addTile(x, y, type, grid){ // start at top left
@@ -296,7 +311,7 @@ class TileGrid {
         this.currentTile = []
         this.currentType = type;
         this.currentRotation = 0;
-        this.currentTile = this.toGrid(type, 0, x, y);
+        this.currentTile = TileGrid.toGrid(type, 0, x, y, TILESIZE);
         for (let i = 0; i < this.currentTile.length; i++){
             if (grid.grid[this.currentTile[i][1]][this.currentTile[i][0]] != undefined){
                 return false;
@@ -322,7 +337,7 @@ class TileGrid {
     }
 
     rotateTile(grid){
-        let newTile = this.toGrid(this.currentType, ++this.currentRotation % 4, this.centerPos[0], this.centerPos[1]);
+        let newTile = TileGrid.toGrid(this.currentType, ++this.currentRotation % 4, this.centerPos[0], this.centerPos[1],TILESIZE);
         if (newTile.filter(a => {
             return (a[0] < 0 || a[0] >= GRIDWIDTH || a[1] < 0 || a[1] >= GRIDHEIGHT);
         }).length > 0){
@@ -338,24 +353,140 @@ class TileGrid {
     }
 }
 
+
+class BufferGrid {
+    constructor(startX, startY, WIDTH, HEIGHT, BUFFER){
+        this.startX = startX;
+        this.startY = startY;
+        this.WIDTH = WIDTH;
+        this.HEIGHT = HEIGHT;
+        this.buffer = BUFFER;
+        this.squaresize = 4;//floor((WIDTH-2*BUFFER)/(4*);
+        this.tileNames = [];
+        this.tileGrid = [];
+        this.currentXOffsets = []
+    }
+
+    addTile(tileName){
+        this.tileNames.push(tileName);
+        this.tileGrid.push(TileGrid.toGrid(tileName, 0, 0, TILESIZE*this.tileGrid.length*3+this.tileGrid.length*this.buffer, TILESIZE))
+        let min = width*2;
+        let max = 0;
+        for (let i = 0; i < this.tileGrid[this.tileGrid.length-1].length; i++){
+            if (this.tileGrid[this.tileGrid.length-1][i][0] < min){
+                min = this.tileGrid[this.tileGrid.length-1][i][0]
+            }
+            if (this.tileGrid[this.tileGrid.length-1][i][0] > max){
+                max = this.tileGrid[this.tileGrid.length-1][i][0]
+            }
+        }
+        this.currentXOffsets.push(parseInt((min+max)/2)) // center of tile
+
+        // var = (width - BUFFERSIZE/2)
+
+
+    }
+
+    removeTile(){
+        this.tileGrid.shift();
+        this.tileNames.shift();
+        for (let i = 0; i < this.tileGrid.length; i++){
+            for (let j = 0; j < this.tileGrid[0].length; j++){
+                this.tileGrid[i][j][1]-=TILESIZE*3+this.buffer
+            }
+        }
+        this.currentXOffsets.shift();
+        console.log(this.tileGrid.length);
+    }
+
+    draw(){
+        for (let i = 0; i < this.tileGrid.length; i++){
+            for (let j = 0; j < this.tileGrid[i].length; j++){
+                if (this.tileGrid[i][j] == undefined){
+                    console.log(i,j);
+                    continue;
+                }
+                fill(this.tileGrid[i][j][2]);
+
+                // come back to this.
+                rect(width-parseInt(BUFFERSIZE/2)-this.currentXOffsets[i]*this.squaresize+this.tileGrid[i][j][0]*this.squaresize, this.startY+this.tileGrid[i][j][1]*this.squaresize+this.buffer, this.squaresize, this.squaresize);
+                
+            }
+        }
+    }
+}
+
+
+function random_tile_name(){
+    return ["L","T","I","J","O","Z","S"][parseInt(random()*7)]
+}
+
 let grid;
 let tileGrid;
+let bufferGrid;
 let holdCount = 0;
 let deletedCount = -1;
+let future_tiles = [];
+let gameOver = false;
 function setup(){
-    createCanvas(500,800);
+    createCanvas(GRIDWIDTH*SQUARESIZE+BUFFERSIZE,GRIDHEIGHT*SQUARESIZE);
+    fetch('tiles.json').then(response => response.json()).then(data => tiles = data).then(e=>{
+        bufferGrid = new BufferGrid(GRIDWIDTH*SQUARESIZE, 0, BUFFERSIZE, height, BUFFERBUFFER);
+        for (let i = 0; i < 3; i++){
+            future_tiles.push(random_tile_name())
+            bufferGrid.addTile(future_tiles[i]);
+        }
+    })
     grid = new SandGrid(GRIDWIDTH, GRIDHEIGHT, SQUARESIZE);
     tileGrid = new TileGrid(GRIDWIDTH,GRIDHEIGHT,SQUARESIZE);
+
+    
+
+    
 }
 
 function draw(){
-    frameRate(40)
+    frameRate(40);
+    if (!bufferGrid){
+        return;
+    }
+
+    // draw functions
+
+    background(100);
+    fill(200);
+    rect(0,0,GRIDWIDTH*SQUARESIZE,GRIDHEIGHT*SQUARESIZE);
     noStroke();
     grid.draw();
     if (deletedCount == -1 && grid.update()){
         deletedCount++;
     };
     tileGrid.draw();
+    fill(50);
+    textSize(32);
+    textAlign(CENTER, CENTER);
+    text("Score: " + globalScore, width-BUFFERSIZE/2, height*3/4);
+    text("Time: " + parseInt(millis()/1000) + "s", width-BUFFERSIZE/2, height*3.5/4)
+    // Draw Future tiles & score in other zone.
+    bufferGrid.draw();
+
+    // GAME OVER
+    if (gameOver){
+        fill(230,100,100);
+        textSize(64);
+        textAlign(CENTER, CENTER);
+        text("GAME OVER", (width-BUFFERSIZE)/2, height/10);
+        return; // Dont do update logic
+    }
+
+    
+
+    // Restart button (reload page) -- to be implemented
+
+
+
+    //update and game logic
+
     if (deletedCount > -1){
         if (frameCount%3 == 0){
             deletedCount++;
@@ -367,14 +498,14 @@ function draw(){
             deletedCount = -1;
         }
     }else if (holdCount == 20){
-        if (!tileGrid.addTile(floor(GRIDWIDTH/3), 0, ["L","T","I","J","O","Z","S"][parseInt(random(7))], grid)){
-            // GAME OVER
-            textSize(32);
-            textAlign(CENTER, CENTER);
-            text("GAME OVER: Score " + globalScore, width/2, height/3);
-
-            noLoop();
+        if (!tileGrid.addTile(floor(GRIDWIDTH/3), 0, future_tiles[0], grid)){
+            gameOver = true;
+            return;
         };
+        future_tiles.shift();
+        bufferGrid.removeTile();
+        future_tiles.push(random_tile_name());
+        bufferGrid.addTile(future_tiles[future_tiles.length-1])
         holdCount++;
     } else if (holdCount == 50){
         if (tileGrid.update(grid)){
@@ -385,15 +516,23 @@ function draw(){
         holdCount++;
     }
     
+
+    
+    
     if (keyIsDown(LEFT_ARROW)){
         tileGrid.moveLeft();
     } else if (keyIsDown(RIGHT_ARROW)){
         tileGrid.moveRight();
     } else if (keyIsDown(DOWN_ARROW)){
-        if (tileGrid.update(grid)){
+        if (holdCount == 50 && tileGrid.update(grid)){
             // Tile has been converted. Display new tile for 10 frames then begin updating.
             holdCount = 0;
         };
+    } else if (keyIsDown(32)){
+        if (holdCount == 50){
+            while(!tileGrid.update(grid));
+            holdCount = 0;
+        }
     }
 }
 
