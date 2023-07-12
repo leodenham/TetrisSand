@@ -1,5 +1,4 @@
 var tiles;
-fetch('tiles.json').then(response => response.json()).then(data => tiles = data);
 
 const TILESIZE = 13;
 const GRIDWIDTH = 100;
@@ -15,26 +14,27 @@ class SandParticle {
     constructor(x, y, colour, size, type){
         this.x = x;
         this.y = y;
+        this.currentColour = colour;
         this.colour = colour;
         this.size = size;
         this.isVisited = false;
         this.toBeRemoved = false;
         this.type = type
         this.flashing = false;
+        this.isActive = true;
     }
 
     draw(){
-        if (this.flashing){
-            fill(255);
-        } else {
-            fill(this.colour);
-        }
-
-        // if (this.isVisited){
-        //     fill(255);
-        // }
+        fill(this.currentColour);
         rect(this.x*this.size, this.y*this.size, this.size, this.size);
-        
+    }
+
+    flash(){
+        if (this.currentColour == this.colour){
+            this.currentColour = [255,255,255]; 
+        } else {
+            this.currentColour = this.colour;
+        }
     }
 }
 
@@ -63,7 +63,7 @@ class SandGrid {
         let anyMoved = false;
         for (let i = this.height-2; i >= 0; i--){
             for (let j = 0; j < this.width; j++){
-                if (this.grid[i][j] != undefined){
+                if (this.grid[i][j] != undefined && this.grid[i][j].isActive){
                     if (this.grid[i+1][j] == undefined){
                         this.grid[i][j].y++;
                         this.grid[i+1][j] = this.grid[i][j];
@@ -85,6 +85,8 @@ class SandGrid {
                                 this.grid[i+1][j-1] = this.grid[i][j];
                                 this.grid[i][j] = undefined;
                                 anyMoved = true;
+                            } else {
+                                this.isActive = false;
                             }
                         } else {
                             if (j > 0 && this.grid[i+1][j-1] == undefined) {
@@ -99,7 +101,9 @@ class SandGrid {
                                 this.grid[i+1][j+1] = this.grid[i][j];
                                 this.grid[i][j] = undefined;
                                 anyMoved = true;
-                            } 
+                            } else {
+                                this.isActive = false;
+                            }
                         }
                     }
                 }
@@ -117,7 +121,7 @@ class SandGrid {
             }
             
             for (let i = 0; i < this.grid.length; i++){
-                if (this.grid[i][0] == undefined){
+                if (this.grid[i][0] == undefined || this.grid[i][0].isVisited == true){
                     continue;
                 }
                 let nextTiles = [this.grid[i][0]];
@@ -158,7 +162,13 @@ class SandGrid {
                 if (hasFound){
                     for (let i = 0; i < visitedTiles.length; i++){
                         visitedTiles[i].toBeRemoved = true;
-                        // this.grid[visitedTiles[i].y][visitedTiles[i].x] = undefined; // REMOVE THIS FOR BETTER REMOVE ANIMNATION.
+                    }
+                    for (let i = 0; i < this.grid.length; i++){
+                        for (let j = 0; j < this.grid.length; j++){
+                            if (this.grid[i][j] != undefined){
+                                this.grid[i][j].isActive = true;
+                            }
+                        }
                     }
                     return true;  // Do not remove any other tiles, removes excess computation. 
                 }
@@ -192,7 +202,7 @@ class SandGrid {
             for (let i = 0; i < this.width; i++){
                 for (let j = 0; j < this.height; j++){
                     if (this.grid[j][i] != undefined&& this.grid[j][i].toBeRemoved){
-                        this.grid[j][i].flashing = true;
+                        this.grid[j][i].flash();
                     }
                 }
             }
@@ -200,7 +210,7 @@ class SandGrid {
             for (let i = 0; i < this.width; i++){
                 for (let j = 0; j < this.height; j++){
                     if (this.grid[j][i] != undefined&& this.grid[j][i].toBeRemoved){
-                        this.grid[j][i].flashing = false;
+                        this.grid[j][i].flash()
                     }
                 }
             }
@@ -264,6 +274,9 @@ class TileGrid {
 
     static toGrid(type, rotation, xOff, yOff, size){
         let retval = [];
+        if (tiles == undefined){
+            return retval;
+        }
         let tile = tiles[type][rotation];
         let colour = tiles["colours"][type]
         for (let i = 0; i < 4; i++){
@@ -289,6 +302,8 @@ class TileGrid {
             fill(this.currentTile[i][2])
             rect(this.currentTile[i][0]*this.size, this.currentTile[i][1]*this.size, this.size,this.size)
         }
+
+
     }
 
     addTile(x, y, type, grid){ // start at top left
@@ -365,10 +380,10 @@ class BufferGrid {
                 max = this.tileGrid[this.tileGrid.length-1][i][0]
             }
         }
-        this.currentXOffsets.push(parseInt(-min-max+width/2))
-        // this.currentXOffsets.push(min-max+BUFFERSIZE/2)
+        this.currentXOffsets.push(parseInt((min+max)/2)) // center of tile
 
-        // width-max+this.startX = min
+        // var = (width - BUFFERSIZE/2)
+
 
     }
 
@@ -381,6 +396,7 @@ class BufferGrid {
             }
         }
         this.currentXOffsets.shift();
+        console.log(this.tileGrid.length);
     }
 
     draw(){
@@ -391,13 +407,14 @@ class BufferGrid {
                     continue;
                 }
                 fill(this.tileGrid[i][j][2]);
-                rect(this.currentXOffsets[i]+this.tileGrid[i][j][0]*this.squaresize+this.buffer, this.startY+this.tileGrid[i][j][1]*this.squaresize+this.buffer, this.squaresize, this.squaresize);
+
+                // come back to this.
+                rect(width-parseInt(BUFFERSIZE/2)-this.currentXOffsets[i]*this.squaresize+this.tileGrid[i][j][0]*this.squaresize, this.startY+this.tileGrid[i][j][1]*this.squaresize+this.buffer, this.squaresize, this.squaresize);
+                
             }
         }
     }
 }
-
-
 
 
 function random_tile_name(){
@@ -410,19 +427,32 @@ let bufferGrid;
 let holdCount = 0;
 let deletedCount = -1;
 let future_tiles = [];
+let gameOver = false;
 function setup(){
     createCanvas(GRIDWIDTH*SQUARESIZE+BUFFERSIZE,GRIDHEIGHT*SQUARESIZE);
+    fetch('tiles.json').then(response => response.json()).then(data => tiles = data).then(e=>{
+        bufferGrid = new BufferGrid(GRIDWIDTH*SQUARESIZE, 0, BUFFERSIZE, height, BUFFERBUFFER);
+        for (let i = 0; i < 3; i++){
+            future_tiles.push(random_tile_name())
+            bufferGrid.addTile(future_tiles[i]);
+        }
+    })
     grid = new SandGrid(GRIDWIDTH, GRIDHEIGHT, SQUARESIZE);
     tileGrid = new TileGrid(GRIDWIDTH,GRIDHEIGHT,SQUARESIZE);
-    bufferGrid = new BufferGrid(GRIDWIDTH*SQUARESIZE, 0, BUFFERSIZE, height, BUFFERBUFFER);
-    for (let i = 0; i < 3; i++){
-        future_tiles.push(random_tile_name())
-        bufferGrid.addTile(future_tiles[i]);
-    }
+
+    
+
+    
 }
 
 function draw(){
-    frameRate(40)
+    frameRate(40);
+    if (!bufferGrid){
+        return;
+    }
+
+    // draw functions
+
     background(100);
     fill(200);
     rect(0,0,GRIDWIDTH*SQUARESIZE,GRIDHEIGHT*SQUARESIZE);
@@ -432,6 +462,31 @@ function draw(){
         deletedCount++;
     };
     tileGrid.draw();
+    fill(50);
+    textSize(32);
+    textAlign(CENTER, CENTER);
+    text("Score: " + globalScore, width-BUFFERSIZE/2, height*3/4);
+    text("Time: " + parseInt(millis()/1000) + "s", width-BUFFERSIZE/2, height*3.5/4)
+    // Draw Future tiles & score in other zone.
+    bufferGrid.draw();
+
+    // GAME OVER
+    if (gameOver){
+        fill(230,100,100);
+        textSize(64);
+        textAlign(CENTER, CENTER);
+        text("GAME OVER", (width-BUFFERSIZE)/2, height/10);
+        return; // Dont do update logic
+    }
+
+    
+
+    // Restart button (reload page) -- to be implemented
+
+
+
+    //update and game logic
+
     if (deletedCount > -1){
         if (frameCount%3 == 0){
             deletedCount++;
@@ -444,11 +499,8 @@ function draw(){
         }
     }else if (holdCount == 20){
         if (!tileGrid.addTile(floor(GRIDWIDTH/3), 0, future_tiles[0], grid)){
-            // GAME OVER
-            textSize(32);
-            textAlign(CENTER, CENTER);
-            text("GAME OVER: Score " + globalScore, width/2, height/3);
-            noLoop();
+            gameOver = true;
+            return;
         };
         future_tiles.shift();
         bufferGrid.removeTile();
@@ -463,20 +515,24 @@ function draw(){
     } else {
         holdCount++;
     }
+    
 
-
-    // Draw Future tiles & score in other zone.
-    bufferGrid.draw();
+    
     
     if (keyIsDown(LEFT_ARROW)){
         tileGrid.moveLeft();
     } else if (keyIsDown(RIGHT_ARROW)){
         tileGrid.moveRight();
     } else if (keyIsDown(DOWN_ARROW)){
-        if (tileGrid.update(grid)){
+        if (holdCount == 50 && tileGrid.update(grid)){
             // Tile has been converted. Display new tile for 10 frames then begin updating.
             holdCount = 0;
         };
+    } else if (keyIsDown(32)){
+        if (holdCount == 50){
+            while(!tileGrid.update(grid));
+            holdCount = 0;
+        }
     }
 }
 
